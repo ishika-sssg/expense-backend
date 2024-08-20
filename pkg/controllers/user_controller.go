@@ -254,7 +254,10 @@ func GetAllGroupsById(c *gin.Context) {
 		Joins("LEFT JOIN group_members ON groups.id = group_members.group_id").
 		Where("groups.group_admin_id = ? OR group_members.member_id = ?", user_id, user_id).
 		Group("groups.id, group_members.group_id").
+<<<<<<< HEAD
 		Order("created_at desc").
+=======
+>>>>>>> 16a4be235ba0645c7b0722b6fa6a7290944014be
 		Find(&group).Error
 
 	fmt.Println(err)
@@ -294,7 +297,11 @@ func GetAllGroupMembersByGroupId(c *gin.Context) {
 	}
 
 	var group_members []models.GroupMembers
+<<<<<<< HEAD
 	err := config.DB.Preload("User").Preload("Group").Preload("Group.Admin").Where("group_id=?", group_id).Order("Created_at desc").Find(&group_members).Error
+=======
+	err := config.DB.Preload("User").Preload("Group").Preload("Group.Admin").Where("group_id=?", group_id).Find(&group_members).Error
+>>>>>>> 16a4be235ba0645c7b0722b6fa6a7290944014be
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
