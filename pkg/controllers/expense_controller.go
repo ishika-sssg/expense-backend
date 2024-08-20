@@ -174,7 +174,12 @@ func GetAllExpensesByGroupId(c *gin.Context) {
 		return
 	}
 
-	err := config.DB.Preload("Expense_paid_by").Where("group_id=?", group_id).Find(&expenses).Error
+	err := config.DB.
+		Preload("Expense_paid_by").
+		Where("group_id=?", group_id).
+		Order("created_at desc").
+		Find(&expenses).
+		Error
 
 	fmt.Println(err)
 	// fmt.Println(group)
@@ -255,7 +260,12 @@ func GetAllTransactions(c *gin.Context) {
 	// making changes here .......
 	// Fetch all transactions for the group where the user is either a debtor or creditor
 
-	err = config.DB.Where("group_id = ? AND (creditor_id = ? OR debtor_id = ?) AND settled=? ", group_id, userid, userid, false).Find(&transactions).Error
+	err = config.DB.
+		Where("group_id = ? AND (creditor_id = ? OR debtor_id = ?) AND settled=? ", group_id, userid, userid, false).
+		Order("created_at desc").
+		Find(&transactions).
+		Error
+
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
@@ -371,7 +381,11 @@ func GetAllUnsettledTransByGroupId(c *gin.Context) {
 	user_id := c.Param("user_id")
 	var unsettledTransaction []models.Transactions
 
-	err := config.DB.Preload("Expense_details").Preload("Expense_details.Expense_paid_by").Where("group_id = ? AND settled = ? AND (creditor_id = ? OR debtor_id = ?)", group_id, false, user_id, user_id).Find(&unsettledTransaction).Error
+	err := config.DB.Preload("Expense_details").
+		Preload("Expense_details.Expense_paid_by").
+		Where("group_id = ? AND settled = ? AND (creditor_id = ? OR debtor_id = ?)", group_id, false, user_id, user_id).
+		Order("created_at desc").
+		Find(&unsettledTransaction).Error
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -529,6 +543,7 @@ func GetAllSettlementRecord(c *gin.Context) {
 		Preload("Transaction").
 		Preload("Transaction.Expense_details").
 		Where("settled_by = ? OR transaction_id IN (SELECT id FROM transactions WHERE creditor_id = ? OR debtor_id = ?)", user_id, user_id, user_id).
+		Order("created_at desc").
 		Find(&settlements).Error
 
 	if err != nil {
