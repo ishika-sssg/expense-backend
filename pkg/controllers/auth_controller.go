@@ -10,6 +10,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/ishika-rg/expenseTrackerBackend/pkg/config"
 	"github.com/ishika-rg/expenseTrackerBackend/pkg/models"
+	"github.com/ishika-rg/expenseTrackerBackend/pkg/utils"
 
 	"time"
 
@@ -70,6 +71,28 @@ func Signup(c *gin.Context) {
 
 	}
 
+	// Send email notification after member registered
+	subject := "Welcome to Monefy!"
+	go func() {
+		email_body := fmt.Sprintf(`
+	<p>Dear %s,</p>
+	<p>Welcome to Monefy!</p>
+	<p>We’re thrilled to have you as a part of our community.</p>
+	<p>If you have any questions or need assistance, feel free to contact our support team.</p>
+	<p>Best Regards,</p>
+	<p>Monefy Team</p>
+`, new_user.Name)
+		if err := utils.SendEmail(new_user.Email, subject, email_body); err != nil {
+			c.JSON(http.StatusInternalServerError,
+				gin.H{
+					"error":   "Member registered but failed to send email",
+					"message": "Member registered but failed to send email",
+					"status":  500,
+				})
+			fmt.Println(err)
+			return
+		}
+	}()
 	// send response
 
 	c.JSON(http.StatusOK, gin.H{

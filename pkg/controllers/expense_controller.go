@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/ishika-rg/expenseTrackerBackend/pkg/config"
 	"github.com/ishika-rg/expenseTrackerBackend/pkg/models"
+	"github.com/ishika-rg/expenseTrackerBackend/pkg/utils"
 
 	"strconv"
 	"time"
@@ -146,6 +147,46 @@ func CreateExpense(c *gin.Context) {
 		return
 	}
 
+	// Send email notification
+
+	// Channel to collect errors from Go routines
+	errorChannel := make(chan error, len(expense_body.MemberIDs))
+
+	subject := "New Expense Added"
+
+	go func() {
+		for _, each_member := range expense_body.MemberIDs {
+			each_member := each_member
+			var user models.User
+			err := config.DB.First(&user, each_member).Error
+			if err != nil {
+				return
+			}
+
+			email_body := fmt.Sprintf(`
+				<p>Hello <strong>%s<strong>,</p>
+				<p><strong> %s </strong> has added an expense of <strong>$ %.2f </strong> in the group <strong>%s </strong> .</p>
+				<p>If you have any questions or need assistance, feel free to contact our support team.</p>
+				<p>Best Regards,</p>
+				<p>Monefy Team</p>
+			`, getUserNameByID(each_member), new_expense.Expense_paid_by.Name, new_expense.Amount, new_expense.Expense_group.Group_name)
+
+			if err := utils.SendEmail(user.Email, subject, email_body); err != nil {
+				errorChannel <- err
+			} else {
+				errorChannel <- nil
+			}
+
+		}
+	}()
+	// Collect errors from Go routines
+	for range expense_body.MemberIDs {
+		if err := <-errorChannel; err != nil {
+			fmt.Println("Failed to send email to some members:", err)
+			// Handle email sending errors if needed
+		}
+	}
+
 	// once transaction os complete, return result
 	c.JSON(http.StatusOK,
 		gin.H{
@@ -174,16 +215,12 @@ func GetAllExpensesByGroupId(c *gin.Context) {
 		return
 	}
 
-<<<<<<< HEAD
 	err := config.DB.
 		Preload("Expense_paid_by").
 		Where("group_id=?", group_id).
 		Order("created_at desc").
 		Find(&expenses).
 		Error
-=======
-	err := config.DB.Preload("Expense_paid_by").Where("group_id=?", group_id).Find(&expenses).Error
->>>>>>> 16a4be235ba0645c7b0722b6fa6a7290944014be
 
 	fmt.Println(err)
 	// fmt.Println(group)
@@ -264,16 +301,12 @@ func GetAllTransactions(c *gin.Context) {
 	// making changes here .......
 	// Fetch all transactions for the group where the user is either a debtor or creditor
 
-<<<<<<< HEAD
 	err = config.DB.
 		Where("group_id = ? AND (creditor_id = ? OR debtor_id = ?) AND settled=? ", group_id, userid, userid, false).
 		Order("created_at desc").
 		Find(&transactions).
 		Error
 
-=======
-	err = config.DB.Where("group_id = ? AND (creditor_id = ? OR debtor_id = ?) AND settled=? ", group_id, userid, userid, false).Find(&transactions).Error
->>>>>>> 16a4be235ba0645c7b0722b6fa6a7290944014be
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
@@ -389,15 +422,11 @@ func GetAllUnsettledTransByGroupId(c *gin.Context) {
 	user_id := c.Param("user_id")
 	var unsettledTransaction []models.Transactions
 
-<<<<<<< HEAD
 	err := config.DB.Preload("Expense_details").
 		Preload("Expense_details.Expense_paid_by").
 		Where("group_id = ? AND settled = ? AND (creditor_id = ? OR debtor_id = ?)", group_id, false, user_id, user_id).
 		Order("created_at desc").
 		Find(&unsettledTransaction).Error
-=======
-	err := config.DB.Preload("Expense_details").Preload("Expense_details.Expense_paid_by").Where("group_id = ? AND settled = ? AND (creditor_id = ? OR debtor_id = ?)", group_id, false, user_id, user_id).Find(&unsettledTransaction).Error
->>>>>>> 16a4be235ba0645c7b0722b6fa6a7290944014be
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -521,6 +550,18 @@ func SettleTransactions(c *gin.Context) {
 		})
 		return
 	}
+	// After the settlement is created, loading the associated transaction details
+	if err := tx.Preload("Transaction").Preload("Transaction.Expense_details").First(&settlement, settlement.ID).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"data":    gin.H{},
+			"error":   true,
+			"status":  500,
+			"message": "Failed to load transaction details",
+		})
+		return
+	}
 
 	// Commit the transaction
 	if err := tx.Commit().Error; err != nil {
@@ -534,6 +575,74 @@ func SettleTransactions(c *gin.Context) {
 		})
 		return
 	}
+	fmt.Println("process to send mails has started....")
+
+	// fmt.Println("mail ids are : ")
+	// fmt.Println(settlement.Transaction.Creditor_id)
+	var creditor models.User
+	errr := config.DB.First(&creditor, settlement.Transaction.Creditor_id).Error
+	if errr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error here": errr.Error(),
+		},
+		)
+	}
+	fmt.Println(creditor.Email)
+	var debtor models.User
+	er := config.DB.First(&debtor, settlement.Transaction.Debtor_id).Error
+	if er != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error here": er.Error(),
+		},
+		)
+	}
+	fmt.Println(debtor.Email)
+
+	// Send email notification after successfull settlement
+	subject := "Expense Settled!"
+	go func() {
+
+		email_body_creditor := fmt.Sprintf(`
+		
+				<p>Hello <strong>%s<strong>,</p>
+				<p><strong> %s </strong> has made a settlement of <strong>$ %.2f </strong> for the expense <strong>%s </strong> .</p>
+
+				<p>If you have any questions or need assistance, feel free to contact our support team.</p>
+				<p>Best Regards,</p>
+				<p>Monefy Team</p>
+			`, creditor.Name, getUserNameByID(settlement.SettledBy), settlement.SettledAmount, settlement.Transaction.Expense_details.Expense_name)
+
+		if err := utils.SendEmail(creditor.Email, subject, email_body_creditor); err != nil {
+			c.JSON(http.StatusInternalServerError,
+				gin.H{
+					"error":   "settlement done but failed to send email",
+					"message": "Settlement done  but failed to send email",
+					"status":  500,
+				})
+			fmt.Println(err)
+			return
+		}
+		email_body_debitor := fmt.Sprintf(`
+		
+				<p>Hello <strong>%s<strong>,</p>
+				<p><strong> %s </strong> has made a settlement of <strong>$ %.2f </strong> for the expense <strong>%s </strong> .</p>
+
+				<p>If you have any questions or need assistance, feel free to contact our support team.</p>
+				<p>Best Regards,</p>
+				<p>Monefy Team</p>
+			`, debtor.Name, getUserNameByID(settlement.SettledBy), settlement.SettledAmount, settlement.Transaction.Expense_details.Expense_name)
+
+		if err := utils.SendEmail(debtor.Email, subject, email_body_debitor); err != nil {
+			c.JSON(http.StatusInternalServerError,
+				gin.H{
+					"error":   "Settlement done but failed to send email",
+					"message": "Settlement done but failed to send email",
+					"status":  500,
+				})
+			fmt.Println(err)
+			return
+		}
+	}()
 
 	// If everything is successful, return a success response
 	c.JSON(http.StatusOK, gin.H{
@@ -550,15 +659,23 @@ func GetAllSettlementRecord(c *gin.Context) {
 	user_id := c.Param("user_id")
 	var settlements []models.Settlement
 
+	type SettlementResponse struct {
+		SettledAtDate string  `json:"settled_at_date"` // Formatted time string
+		CreditorName  string  `json:"creditor_name"`
+		DebtorName    string  `json:"debtor_name"`
+		Amount        float64 `json:"amount"`
+		SettlerName   string  `json:"settler_name"`
+		Cred_id       int     `json:"cred_id"`
+		Deb_id        int     `json:"deb_id"`
+		Sett_id       int     `json:"sett_id"`
+	}
+
 	// Query settlements where the user is either the one who settled or involved in the transaction
 	err := config.DB.
 		Preload("Transaction").
 		Preload("Transaction.Expense_details").
 		Where("settled_by = ? OR transaction_id IN (SELECT id FROM transactions WHERE creditor_id = ? OR debtor_id = ?)", user_id, user_id, user_id).
-<<<<<<< HEAD
 		Order("created_at desc").
-=======
->>>>>>> 16a4be235ba0645c7b0722b6fa6a7290944014be
 		Find(&settlements).Error
 
 	if err != nil {
@@ -571,6 +688,20 @@ func GetAllSettlementRecord(c *gin.Context) {
 		})
 		return
 	}
+	var response []SettlementResponse
+	for _, settlement := range settlements {
+		response = append(response, SettlementResponse{
+
+			SettledAtDate: settlement.SettledAt.Format("02 Jan 2006"), // Format the time as a readable string
+			CreditorName:  getUserNameByID(settlement.Transaction.Creditor_id),
+			DebtorName:    getUserNameByID(settlement.Transaction.Debtor_id),
+			Amount:        settlement.Transaction.Amount,
+			SettlerName:   getUserNameByID(settlement.SettledBy),
+			Cred_id:       settlement.Transaction.Creditor_id,
+			Deb_id:        settlement.Transaction.Debtor_id,
+			Sett_id:       settlement.SettledBy,
+		})
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -579,6 +710,7 @@ func GetAllSettlementRecord(c *gin.Context) {
 		"status":  200,
 		"data": gin.H{
 			"settlements": settlements,
+			"info":        response,
 		},
 	})
 }

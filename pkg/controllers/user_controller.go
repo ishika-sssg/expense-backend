@@ -3,10 +3,12 @@ package controllers
 import (
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ishika-rg/expenseTrackerBackend/pkg/config"
 	"github.com/ishika-rg/expenseTrackerBackend/pkg/models"
+	"github.com/ishika-rg/expenseTrackerBackend/pkg/utils"
 	"github.com/jinzhu/gorm"
 )
 
@@ -205,6 +207,31 @@ func AddGroupMemberByEmail(c *gin.Context) {
 		return
 	}
 
+	// Send email notification
+
+	subject := "Added to Group"
+	email_body := fmt.Sprintf(`
+	<p>Hello %s,</p>
+	
+	<p>You've been successfully added to <strong> %s </strong> group.</p>
+	<p>If you have any questions or need assistance, feel free to contact our support team.</p>
+	<p>Best Regards,</p>
+	<p>Monefy Team</p>
+`, new_member.User.Name, group.Group_name)
+
+	if err := utils.SendEmail(new_member.Member_email, subject, email_body); err != nil {
+		c.JSON(http.StatusInternalServerError,
+			gin.H{
+				"error":   "Member added but failed to send email",
+				"message": "Member added but failed to send email",
+				"status":  500,
+			})
+		fmt.Println(err)
+		return
+	}
+	fmt.Println("here is the password from env file :")
+	fmt.Println(os.Getenv("GMAIL_PASSWORD"))
+
 	// send response
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -254,10 +281,7 @@ func GetAllGroupsById(c *gin.Context) {
 		Joins("LEFT JOIN group_members ON groups.id = group_members.group_id").
 		Where("groups.group_admin_id = ? OR group_members.member_id = ?", user_id, user_id).
 		Group("groups.id, group_members.group_id").
-<<<<<<< HEAD
 		Order("created_at desc").
-=======
->>>>>>> 16a4be235ba0645c7b0722b6fa6a7290944014be
 		Find(&group).Error
 
 	fmt.Println(err)
@@ -297,11 +321,7 @@ func GetAllGroupMembersByGroupId(c *gin.Context) {
 	}
 
 	var group_members []models.GroupMembers
-<<<<<<< HEAD
 	err := config.DB.Preload("User").Preload("Group").Preload("Group.Admin").Where("group_id=?", group_id).Order("Created_at desc").Find(&group_members).Error
-=======
-	err := config.DB.Preload("User").Preload("Group").Preload("Group.Admin").Where("group_id=?", group_id).Find(&group_members).Error
->>>>>>> 16a4be235ba0645c7b0722b6fa6a7290944014be
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
