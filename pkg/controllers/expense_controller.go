@@ -659,17 +659,6 @@ func GetAllSettlementRecord(c *gin.Context) {
 	user_id := c.Param("user_id")
 	var settlements []models.Settlement
 
-	type SettlementResponse struct {
-		SettledAtDate string  `json:"settled_at_date"` // Formatted time string
-		CreditorName  string  `json:"creditor_name"`
-		DebtorName    string  `json:"debtor_name"`
-		Amount        float64 `json:"amount"`
-		SettlerName   string  `json:"settler_name"`
-		Cred_id       int     `json:"cred_id"`
-		Deb_id        int     `json:"deb_id"`
-		Sett_id       int     `json:"sett_id"`
-	}
-
 	// Query settlements where the user is either the one who settled or involved in the transaction
 	err := config.DB.
 		Preload("Transaction").
@@ -688,9 +677,9 @@ func GetAllSettlementRecord(c *gin.Context) {
 		})
 		return
 	}
-	var response []SettlementResponse
+	var response []models.SettlementResponse
 	for _, settlement := range settlements {
-		response = append(response, SettlementResponse{
+		response = append(response, models.SettlementResponse{
 
 			SettledAtDate: settlement.SettledAt.Format("02 Jan 2006"), // Format the time as a readable string
 			CreditorName:  getUserNameByID(settlement.Transaction.Creditor_id),

@@ -35,6 +35,7 @@ func SetRouter() *gin.Engine {
 		expense.GET("/unsettledtransactions/group_id/:group_id/user_id/:user_id", middleware.RequireAuth, controllers.GetAllUnsettledTransByGroupId)
 		expense.POST("/settletransaction/transid/:transaction_id/user_id/:user_id", middleware.RequireAuth, controllers.SettleTransactions)
 		expense.GET("/allsettlements/user_id/:user_id", middleware.RequireAuth, controllers.GetAllSettlementRecord)
+		expense.GET("/csv/settlerecord/user_id/:user_id", middleware.RequireAuth, controllers.GenerateCsvSettlements)
 	}
 
 	return r

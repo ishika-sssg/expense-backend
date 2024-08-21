@@ -72,3 +72,14 @@ type SummaryResponse struct {
 	TotalBorrowed   float64          `json:"total_borrowed"`
 	NetBalance      float64          `json:"net_balance"` // Positive if the user is owed, negative if the user owes
 }
+
+type SettlementResponse struct {
+	SettledAtDate string  `json:"settled_at_date"` // Formatted time string
+	CreditorName  string  `json:"creditor_name"`
+	DebtorName    string  `json:"debtor_name"`
+	Amount        float64 `json:"amount"`
+	SettlerName   string  `json:"settler_name"`
+	Cred_id       int     `json:"cred_id"`
+	Deb_id        int     `json:"deb_id"`
+	Sett_id       int     `json:"sett_id"`
+}
