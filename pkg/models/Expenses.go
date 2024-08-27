@@ -42,6 +42,8 @@ type Transactions struct {
 	Expense_details Expense `gorm:"foreignKey:expense_id" json:"expense_details"`
 	Settled         bool    `gorm:"column:settled" json:"settled"` // New field to indicate settlement status
 
+	// added group_details
+	GroupDetails Group `gorm:"foreignKey:group_id" json:"group_details"`
 }
 
 type Settlement struct {

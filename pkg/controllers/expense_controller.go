@@ -150,11 +150,11 @@ func CreateExpense(c *gin.Context) {
 	// Send email notification
 
 	// Channel to collect errors from Go routines
-	errorChannel := make(chan error, len(expense_body.MemberIDs))
-
-	subject := "New Expense Added"
-
 	go func() {
+		errorChannel := make(chan error, len(expense_body.MemberIDs))
+
+		subject := "New Expense Added"
+
 		for _, each_member := range expense_body.MemberIDs {
 			each_member := each_member
 			var user models.User
@@ -178,14 +178,14 @@ func CreateExpense(c *gin.Context) {
 			}
 
 		}
-	}()
-	// Collect errors from Go routines
-	for range expense_body.MemberIDs {
-		if err := <-errorChannel; err != nil {
-			fmt.Println("Failed to send email to some members:", err)
-			// Handle email sending errors if needed
+		// Collect errors from Go routines
+		for range expense_body.MemberIDs {
+			if err := <-errorChannel; err != nil {
+				fmt.Println("Failed to send email to some members:", err)
+				// Handle email sending errors if needed
+			}
 		}
-	}
+	}()
 
 	// once transaction os complete, return result
 	c.JSON(http.StatusOK,
@@ -702,4 +702,123 @@ func GetAllSettlementRecord(c *gin.Context) {
 			"info":        response,
 		},
 	})
+}
+
+func GetUserTransactionsWithMembers(c *gin.Context) {
+	userID := c.Param("user_id")
+	// Convert userID to an integer
+	loggedInUserID, err := strconv.Atoi(userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   true,
+			"message": "Invalid User ID",
+			"status":  400,
+		})
+		return
+	}
+	type TransactionSummary struct {
+		ID             int     `json:"id"`
+		GroupID        int     `json:"group_id"`
+		GroupDesc      string  `json:"group_desc"`
+		GroupName      string  `json:"group_name"`
+		GroupAdminID   int     `json:"group_admin_id"`
+		GroupAdminName string  `json:"group_admin_name"`
+		CreditorName   string  `json:"creditor_name"`
+		DebtorName     string  `json:"debtor_name"`
+		ExpenseAmount  float64 `json:"expense_amount"`
+		CreditbyId     int     `json:"creditby_id"`
+
+		// Add more fields as needed
+
+	}
+	type MemberTransactionSummary struct {
+		MemberID       int                  `json:"member_id"`
+		MemberName     string               `json:"member_name"`
+		OverallAmount  float64              `json:"overall_amount"`
+		Status         string               `json:"status"`
+		PendingDetails []TransactionSummary `json:"pending_details"`
+	}
+
+	// var transactions []models.Transactions
+
+	var transactions []models.Transactions
+
+	// Fetch all transactions involving the logged-in user
+	if err := config.DB.
+		Where("(creditor_id = ? OR debtor_id = ?) AND settled IS NOT NULL", loggedInUserID, loggedInUserID).
+		Preload("Expense_details").
+		Preload("GroupDetails").
+		Preload("GroupDetails.Admin").
+		Find(&transactions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch transactions", "details": err.Error()})
+		return
+	}
+
+	//  Group by each member
+	memberSummary := make(map[int]*MemberTransactionSummary)
+	for _, transaction := range transactions {
+		var memberID int
+		var isCreditor bool
+
+		// Determine the member and the role of the logged-in user in this transaction
+		if transaction.Creditor_id == loggedInUserID {
+			memberID = transaction.Debtor_id
+			isCreditor = true
+		} else {
+			memberID = transaction.Creditor_id
+			isCreditor = false
+		}
+
+		// Initialize the member summary if not already done
+		if _, exists := memberSummary[memberID]; !exists {
+			memberSummary[memberID] = &MemberTransactionSummary{
+				MemberID:       memberID,
+				MemberName:     getUserNameByID(memberID),
+				OverallAmount:  0,
+				Status:         "All completed", // Default status
+				PendingDetails: []TransactionSummary{},
+			}
+		}
+
+		// Calculating overall amount and check for unsettled transactions
+		if !transaction.Settled {
+			memberSummary[memberID].Status = "Not completed"
+			memberSummary[memberID].PendingDetails = append(memberSummary[memberID].PendingDetails,
+				TransactionSummary{
+					ID:             int(transaction.ID),
+					GroupID:        int(transaction.Group_id),
+					GroupName:      transaction.GroupDetails.Group_name,
+					GroupDesc:      transaction.GroupDetails.Description,
+					GroupAdminID:   transaction.GroupDetails.Group_admin_id,
+					GroupAdminName: transaction.GroupDetails.Admin.Name,
+					CreditorName:   getUserNameByID(transaction.Creditor_id),
+					DebtorName:     getUserNameByID(transaction.Debtor_id),
+					ExpenseAmount:  transaction.Amount,
+					CreditbyId:     int(transaction.Creditor_id),
+				},
+			)
+		}
+
+		if isCreditor && !transaction.Settled {
+			memberSummary[memberID].OverallAmount += transaction.Amount
+		} else if !isCreditor && !transaction.Settled {
+			memberSummary[memberID].OverallAmount -= transaction.Amount
+		}
+	}
+
+	// forming the result set for response
+	var result []MemberTransactionSummary
+	for _, summary := range memberSummary {
+		result = append(result, *summary)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    result,
+		"message": "Member wise transactions fetched successfully",
+		"status":  200,
+		"error":   false,
+	})
+
 }
